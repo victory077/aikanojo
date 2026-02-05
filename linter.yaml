@@ -1,0 +1,34 @@
+# 出力整形ルール (Discord用)
+
+# 置換ルール（正規表現）
+replacements:
+  # 見出しを太字に変換
+  - pattern: "^#{1,6}\\s*(.+)$"
+    replacement: "**\\1**"
+    flags: "multiline"
+  
+  # テーブルの区切り線を削除
+  - pattern: "\\|[-:]+\\|[-:| ]+\\|"
+    replacement: ""
+  
+  # テーブルを整形（パイプを矢印に）
+  - pattern: "\\|\\s*([^|]+)\\s*\\|\\s*([^|]+)\\s*\\|"
+    replacement: "\\1 → \\2"
+
+# 禁止パターン（マッチしたら削除）
+forbidden_patterns:
+  - "```markdown"
+  - "```md"
+
+# コードブロック対象キーワード
+code_keywords:
+  - "="
+  - "+="
+  - "-="
+  - "def "
+  - "class "
+  - "import "
+  - "function"
+  - "const "
+  - "let "
+  - "var "
