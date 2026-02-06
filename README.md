@@ -29,7 +29,7 @@ NOTIFY_CHANNEL_ID=your_channel_id
 
 ### 3. 起動
 ```bash
-uv run python main.py
+uv run src/main.py
 ```
 
 ## コマンド
@@ -44,22 +44,28 @@ uv run python main.py
 
 ```
 aikanojo/
-├── main.py           # メインBOT
-├── character.yaml    # キャラクター設定
-├── affinity.py       # 好感度管理
-├── memory.py         # 記憶管理
-├── linter.py         # 出力整形
-├── linter.yaml       # 整形ルール
-├── user_affinity.json  # 好感度データ（自動生成）
-├── user_memory.json    # 記憶データ（自動生成）
-└── .env              # 環境変数
+├── src/                    # ソースコード
+│   ├── __init__.py
+│   ├── main.py             # メインBOT
+│   ├── affinity.py         # 好感度管理
+│   ├── memory.py           # 記憶管理
+│   └── linter.py           # 出力整形
+├── config/                 # 設定ファイル
+│   ├── character.yaml      # キャラクター設定
+│   └── linter.yaml         # 整形ルール
+├── data/                   # ユーザーデータ（自動生成）
+│   ├── user_affinity.json
+│   └── user_memory.json
+├── .env                    # 環境変数
+├── pyproject.toml
+└── README.md
 ```
 
 ## カスタマイズ
 
-- **キャラクター変更**: `character.yaml`を編集
-- **整形ルール変更**: `linter.yaml`を編集
-- **好感度設定**: `character.yaml`の`affinity_config`を編集
+- **キャラクター変更**: `config/character.yaml`を編集
+- **整形ルール変更**: `config/linter.yaml`を編集
+- **好感度設定**: `config/character.yaml`の`affinity_config`を編集
 
 ## ライセンス
 

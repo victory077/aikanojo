@@ -22,7 +22,7 @@ MODEL_IDENTIFIER = os.getenv('MODEL_IDENTIFIER')
 NOTIFY_CHANNEL_ID = os.getenv('NOTIFY_CHANNEL_ID')  # 通知チャンネルID
 
 # キャラクター設定を読み込む
-CHARACTER_FILE = Path(__file__).parent / "character.yaml"
+CHARACTER_FILE = Path(__file__).parent.parent / "config" / "character.yaml"
 with open(CHARACTER_FILE, "r", encoding="utf-8") as f:
     character = yaml.safe_load(f)
 
@@ -46,18 +46,25 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 client = OpenAI(base_url=LM_STUDIO_BASE_URL, api_key=LM_STUDIO_API_KEY)
 
 
-def build_system_prompt(user_id: str) -> str:
+def build_system_prompt(user_id: str, user_message: str = "") -> str:
     """ユーザーの好感度と記憶に応じたシステムプロンプトを構築する"""
     affinity = affinity_manager.get_affinity(user_id)
     level_name, level_prompt = get_affinity_level(affinity, character.get("affinity_levels", {}))
-    memory = memory_manager.get_memory(user_id)
+    
+    # 3層記憶を取得（関連トピックのみ）
+    memory = memory_manager.get_memory_for_prompt(user_id, user_message)
     
     base_prompt = character.get("base_prompt", "あなたはAIアシスタントです。")
     
     prompt = f"""{base_prompt}
 
 【好感度: {affinity}/100 - {level_name}】
-{level_prompt}"""
+{level_prompt}
+
+【記憶の使用ルール】
+- 記憶はユーザーがその話題に触れた時のみ自然に参照
+- 唐突に過去の話題を持ち出さない
+- 現在の会話の流れを最優先"""
     
     if memory:
         prompt += f"\n\n【この人の記憶】\n{memory}"
@@ -170,8 +177,8 @@ async def ask(interaction: discord.Interaction, message: str):
         old_affinity = affinity_manager.get_affinity(user_id)
         new_affinity = affinity_manager.add_affinity(user_id, affinity_change)
         
-        # システムプロンプトを構築
-        system_prompt = build_system_prompt(user_id)
+        # システムプロンプトを構築（ユーザーメッセージも渡して関連記憶を取得）
+        system_prompt = build_system_prompt(user_id, message)
         
         # 好感度変動をプロンプトに追加
         if affinity_change < 0:
@@ -207,18 +214,33 @@ async def ask(interaction: discord.Interaction, message: str):
                 else:
                     await interaction.channel.send(chunk)
         
-        # 記憶を更新（バックグラウンドで）
+        # 記憶を更新（3層対応）
         try:
-            old_memory = memory_manager.get_memory(user_id)
-            memory_prompt = build_memory_update_prompt(old_memory, message, reply)
+            old_permanent = memory_manager.get_permanent(user_id)
+            old_recent = memory_manager.get_recent(user_id)
+            memory_prompt = build_memory_update_prompt(old_permanent, old_recent, message, reply)
             memory_response = client.chat.completions.create(
                 model=MODEL_IDENTIFIER,
                 messages=[{"role": "user", "content": memory_prompt}],
                 temperature=0.3,
-                max_tokens=500,
+                max_tokens=300,
             )
-            new_memory = memory_response.choices[0].message.content.strip()
-            memory_manager.update_memory(user_id, new_memory)
+            result = memory_response.choices[0].message.content.strip()
+            
+            # 結果をパース
+            for line in result.split("\n"):
+                if line.startswith("PERMANENT:"):
+                    perm = line.replace("PERMANENT:", "").strip()
+                    if perm and perm != "(変更なし)":
+                        memory_manager.update_permanent(user_id, perm)
+                elif line.startswith("RECENT:"):
+                    recent = line.replace("RECENT:", "").strip()
+                    if recent:
+                        memory_manager.update_recent(user_id, recent)
+                elif line.startswith("TOPIC:"):
+                    topic = line.replace("TOPIC:", "").strip()
+                    if topic and topic != "(なし)":
+                        memory_manager.add_topic(user_id, topic)
         except Exception:
             pass  # 記憶更新失敗は無視
         

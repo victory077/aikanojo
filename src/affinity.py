@@ -1,10 +1,10 @@
 """ユーザー好感度管理モジュール"""
-import json
+import yaml
 from pathlib import Path
 from typing import Optional
 
 # 好感度データの保存先
-AFFINITY_FILE = Path(__file__).parent / "user_affinity.json"
+AFFINITY_FILE = Path(__file__).parent.parent / "data" / "user_affinity.yaml"
 
 
 class AffinityManager:
@@ -17,19 +17,19 @@ class AffinityManager:
         self._data: dict[str, dict] = self._load()
     
     def _load(self) -> dict:
-        """JSONファイルから好感度データを読み込む"""
+        """から好感度データを読み込む"""
         if AFFINITY_FILE.exists():
             try:
                 with open(AFFINITY_FILE, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            except (json.JSONDecodeError, IOError):
+                    return yaml.safe_load(f) or {}
+            except (yaml.YAMLError, IOError):
                 return {}
         return {}
     
     def _save(self) -> None:
-        """好感度データをJSONファイルに保存する"""
+        """好感度データをYAMLファイルに保存する"""
         with open(AFFINITY_FILE, "w", encoding="utf-8") as f:
-            json.dump(self._data, f, ensure_ascii=False, indent=2)
+            yaml.dump(self._data, f, allow_unicode=True, default_flow_style=False)
     
     def get_affinity(self, user_id: str) -> int:
         """ユーザーの好感度を取得する"""

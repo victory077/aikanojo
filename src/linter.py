@@ -3,7 +3,7 @@ import re
 import yaml
 from pathlib import Path
 
-LINTER_FILE = Path(__file__).parent / "linter.yaml"
+LINTER_FILE = Path(__file__).parent.parent / "config" / "linter.yaml"
 
 
 def load_linter_rules() -> dict:
