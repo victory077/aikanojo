@@ -15,3 +15,6 @@ wheels/
 # User data (auto-generated)
 data/user_affinity.yaml
 data/user_memory.yaml
+
+# Diary data (auto-generated)
+diary/
