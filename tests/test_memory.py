@@ -40,7 +40,7 @@ class TestMemoryManager:
         assert memory_manager.get_permanent("user1") == "名前:テスト, 好み:寿司"
     
     def test_permanent_max_length(self, memory_manager):
-        """長期記憶の文字数制限（300文字）"""
+        """長期記憶の文字数制限(300文字)"""
         long_text = "あ" * 500
         memory_manager.update_permanent("user1", long_text)
         assert len(memory_manager.get_permanent("user1")) == 300
@@ -51,13 +51,13 @@ class TestMemoryManager:
         assert memory_manager.get_recent("user1") == "今日は寿司の話をした"
     
     def test_recent_max_length(self, memory_manager):
-        """短期記憶の文字数制限（200文字）"""
+        """短期記憶の文字数制限(200文字)"""
         long_text = "あ" * 300
         memory_manager.update_recent("user1", long_text)
         assert len(memory_manager.get_recent("user1")) == 200
     
     def test_add_topic(self, memory_manager):
-        """中期記憶（トピック）の追加"""
+        """中期記憶(トピック)の追加"""
         memory_manager.add_topic("user1", "WoTの話")
         topics = memory_manager.get_topics("user1")
         assert len(topics) == 1
@@ -97,20 +97,13 @@ class TestMemoryManager:
         
         # 関連キーワードなし
         prompt = memory_manager.get_memory_for_prompt("user1", "こんにちは")
-        assert "【基本情報】" in prompt
-        assert "【直近】" in prompt
-        assert "【関連する過去の話題】" not in prompt
+        assert "[基本情報]" in prompt
+        assert "[直近]" in prompt
+        assert "[関連過去話題]" not in prompt
         
         # 関連キーワードあり
         prompt = memory_manager.get_memory_for_prompt("user1", "WoTってゲーム？")
-        assert "【関連する過去の話題】" in prompt
-    
-    def test_has_memory(self, memory_manager):
-        """記憶の有無判定"""
-        assert not memory_manager.has_memory("user1")
-        
-        memory_manager.update_permanent("user1", "test")
-        assert memory_manager.has_memory("user1")
+        assert "[関連過去話題]" in prompt
     
     def test_persistence(self, temp_dir, monkeypatch):
         """データの永続化"""

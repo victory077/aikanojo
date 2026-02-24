@@ -12,6 +12,12 @@ from datetime import datetime
 from affinity import AffinityManager, get_affinity_level
 from memory import MemoryManager, build_memory_update_prompt
 from linter import format_for_discord
+from character_prompt import (
+    build_character_generation_prompt,
+    build_greetings_generation_prompt,
+    extract_yaml_from_response,
+    validate_character_yaml,
+)
 
 # 設定読み込み
 load_dotenv()
@@ -46,28 +52,50 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 client = OpenAI(base_url=LM_STUDIO_BASE_URL, api_key=LM_STUDIO_API_KEY)
 
 
+@bot.event
+async def on_ready():
+    """BOT起動時にスラッシュコマンドを同期し、通知を送信"""
+    await bot.tree.sync()
+
+    # 起動通知
+    if NOTIFY_CHANNEL_ID:
+        try:
+            channel = bot.get_channel(int(NOTIFY_CHANNEL_ID))
+            if channel:
+                await channel.send(get_time_greeting(is_startup=True))
+        except Exception:
+            pass
+
+
 def build_system_prompt(user_id: str, user_message: str = "") -> str:
     """ユーザーの好感度と記憶に応じたシステムプロンプトを構築する"""
     affinity = affinity_manager.get_affinity(user_id)
     level_name, level_prompt = get_affinity_level(affinity, character.get("affinity_levels", {}))
     
-    # 3層記憶を取得（関連トピックのみ）
+    # 3層記憶を取得(関連トピックのみ)
     memory = memory_manager.get_memory_for_prompt(user_id, user_message)
     
     base_prompt = character.get("base_prompt", "あなたはAIアシスタントです。")
     
-    prompt = f"""{base_prompt}
+    # 共通ルール(全キャラ共通・キャラYAMLに書かない)
+    common_rules = """[共通ルール]
+- 必ず日本語のみで回答してください。中国語や英語を混ぜないでください
+- 絵文字は控えめにしてください"""
 
-【好感度: {affinity}/100 - {level_name}】
+    prompt = f"""{common_rules}
+
+{base_prompt}
+
+[好感度: {affinity}/100 - {level_name}]
 {level_prompt}
 
-【記憶の使用ルール】
+[記憶の使用ルール]
 - 記憶はユーザーがその話題に触れた時のみ自然に参照
 - 唐突に過去の話題を持ち出さない
 - 現在の会話の流れを最優先"""
     
     if memory:
-        prompt += f"\n\n【この人の記憶】\n{memory}"
+        prompt += f"\n\n[この人の記憶]\n{memory}"
     
     return prompt
 
@@ -115,36 +143,77 @@ JSONフォーマットで回答: {"score": 数値, "reason": "理由"}"""},
     return 1  # デフォルトは+1
 
 
+# 挨拶テンプレートを読み込む
+GREETINGS_FILE = Path(__file__).parent.parent / "config" / "greetings.yaml"
+
+
+def _load_greetings() -> dict:
+    """挨拶テンプレートをYAMLファイルから読み込む"""
+    if GREETINGS_FILE.exists():
+        try:
+            with open(GREETINGS_FILE, "r", encoding="utf-8") as f:
+                return yaml.safe_load(f) or {}
+        except (yaml.YAMLError, IOError):
+            pass
+    return {}
+
+
+def _get_time_key_startup(hour: int) -> str:
+    """起動時の時間帯キーを返す"""
+    if 5 <= hour < 10:
+        return "early_morning"
+    elif 10 <= hour < 12:
+        return "late_morning"
+    elif 12 <= hour < 14:
+        return "noon"
+    elif 14 <= hour < 17:
+        return "afternoon"
+    elif 17 <= hour < 21:
+        return "evening"
+    elif 21 <= hour < 24:
+        return "night"
+    else:
+        return "midnight"
+
+
+def _get_time_key_shutdown(hour: int) -> str:
+    """停止時の時間帯キーを返す"""
+    if 5 <= hour < 12:
+        return "morning"
+    elif 12 <= hour < 17:
+        return "afternoon"
+    elif 17 <= hour < 21:
+        return "evening"
+    elif 21 <= hour < 24:
+        return "night"
+    else:
+        return "midnight"
+
+
 def get_time_greeting(is_startup: bool = True) -> str:
-    """時間帯に応じた挨拶を生成"""
+    """時間帯に応じた挨拶を返す(config/greetings.yamlから読み込み)"""
+    import random
+
+    greetings = _load_greetings()
     hour = datetime.now().hour
-    
-    if is_startup:  # 起動時
-        if 5 <= hour < 10:
-            return "おはよう！プロデューサーくん！今日も一緒にがんばろうね✨"
-        elif 10 <= hour < 12:
-            return "やっと起きたの…？もう、午前中だよ！プロデューサーくん！"
-        elif 12 <= hour < 14:
-            return "おはようプロデューサーくん！お昼ご飯はもう食べた？"
-        elif 14 <= hour < 17:
-            return "こんにちはプロデューサーくん！午後も一緒にがんばろうね"
-        elif 17 <= hour < 21:
-            return "こんばんは！プロデューサーくん、今日もお疲れ様！"
-        elif 21 <= hour < 24:
-            return "こんな時間から？…まぁ、会えて嬉しいけどね。プロデューサーくん！"
-        else:  # 0-4時
-            return "こんな深夜に…？無理しちゃダメだよ、プロデューサーくん。"
-    else:  # 停止時
-        if 5 <= hour < 12:
-            return "じゃあね！今日も一日がんばってね、プロデューサーくん！"
-        elif 12 <= hour < 17:
-            return "いってらっしゃい！また後で会おうね、プロデューサーくん！"
-        elif 17 <= hour < 21:
-            return "お疲れ様！ゆっくり休んでね、プロデューサーくん！"
-        elif 21 <= hour < 24:
-            return "おやすみ…プロデューサーくんもゆっくり休んでね🌙"
-        else:  # 0-4時
-            return "こんな時間まで…お疲れ様。ちゃんと寝るんだよ！プロデューサーくん。"
+
+    if is_startup:
+        section = greetings.get("startup", {})
+        time_key = _get_time_key_startup(hour)
+    else:
+        section = greetings.get("shutdown", {})
+        time_key = _get_time_key_shutdown(hour)
+
+    messages = section.get(time_key, [])
+    if messages:
+        return random.choice(messages)
+
+    # フォールバック(greetings.yamlが無い/不完全な場合)
+    char_name = character.get("name", "AI")
+    if is_startup:
+        return f"{char_name}、起動しました！"
+    else:
+        return f"{char_name}、停止します。おやすみなさい。"
 
 
 @bot.event
@@ -173,18 +242,18 @@ async def ask(interaction: discord.Interaction, message: str):
         # メッセージの感情を分析して好感度変動値を決定
         affinity_change = analyze_message_sentiment(message)
         
-        # 好感度を更新（返信の前に更新して、反応に反映させる）
+        # 好感度を更新(返信の前に更新して、反応に反映させる)
         old_affinity = affinity_manager.get_affinity(user_id)
         new_affinity = affinity_manager.add_affinity(user_id, affinity_change)
         
-        # システムプロンプトを構築（ユーザーメッセージも渡して関連記憶を取得）
+        # システムプロンプトを構築(ユーザーメッセージも渡して関連記憶を取得)
         system_prompt = build_system_prompt(user_id, message)
         
         # 好感度変動をプロンプトに追加
         if affinity_change < 0:
-            mood_hint = f"\n\n【注意: ユーザーの発言は少し失礼でした。好感度が{affinity_change}下がりました。少し傷ついた様子で返答してください】"
+            mood_hint = f"\n\n[注意: ユーザーの発言は少し失礼でした。好感度が{affinity_change}下がりました。少し傷ついた様子で返答してください]"
         elif affinity_change >= 3:
-            mood_hint = f"\n\n【注意: ユーザーの発言はとても優しかったです。好感度が+{affinity_change}上がりました。嬉しそうに返答してください】"
+            mood_hint = f"\n\n[注意: ユーザーの発言はとても優しかったです。好感度が+{affinity_change}上がりました。嬉しそうに返答してください]"
         else:
             mood_hint = ""
         
@@ -202,7 +271,7 @@ async def ask(interaction: discord.Interaction, message: str):
         # Discord向けに出力を整形
         reply = format_for_discord(reply)
         
-        # Discord 2000文字制限に対応（分割送信）
+        # Discord 2000文字制限に対応(分割送信)
         if len(reply) <= 2000:
             await interaction.followup.send(reply)
         else:
@@ -214,7 +283,7 @@ async def ask(interaction: discord.Interaction, message: str):
                 else:
                     await interaction.channel.send(chunk)
         
-        # 記憶を更新（3層対応）
+        # 記憶を更新(3層対応)
         try:
             old_permanent = memory_manager.get_permanent(user_id)
             old_recent = memory_manager.get_recent(user_id)
@@ -268,9 +337,106 @@ async def check_affinity(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed)
 
 
-@bot.tree.command(name="shutdown", description="BOTを停止する（管理者のみ）")
+@bot.tree.command(name="change", description="LLMでキャラクターYAMLを自動生成する")
+async def change_character(interaction: discord.Interaction, series: str, character_name: str):
+    """LLMを呼び出してキャラクターYAMLと挨拶テンプレートを自動生成する"""
+    await interaction.response.defer()
+
+    config_dir = Path(__file__).parent.parent / "config"
+    # ファイル名用にキャラ名を安全な形式に変換
+    safe_name = re.sub(r'[^\w]', '_', character_name).lower()
+
+    try:
+        # --- 注意書き ---
+        warning_embed = discord.Embed(
+            title=f"🎭 {character_name}({series})を生成中...",
+            description=(
+                "⚠️ **注意**: この機能はWeb検索対応のLLMが必要です。\n"
+                "ローカルLLMでは正確なキャラ情報を取得できない場合があります。\n"
+                "また、この機能は**動作確認が十分ではありません**。"
+            ),
+            color=discord.Color.orange()
+        )
+        await interaction.followup.send(embed=warning_embed)
+
+        # --- ステップ1: キャラクターYAML生成 ---
+        await interaction.channel.send("📝 **ステップ1/2**: キャラクター設定を生成中...")
+
+        char_prompt = build_character_generation_prompt(series, character_name)
+        char_response = client.chat.completions.create(
+            model=MODEL_IDENTIFIER,
+            messages=[
+                {"role": "system", "content": "あなたはアニメ・ゲームキャラクターの設定資料を作成する専門家です。YAML形式のみで出力してください。"},
+                {"role": "user", "content": char_prompt}
+            ],
+            temperature=0.7,
+            max_tokens=4000,
+        )
+
+        char_yaml_raw = char_response.choices[0].message.content.strip()
+        char_yaml_content = extract_yaml_from_response(char_yaml_raw)
+
+        # 必須フィールドの検証
+        valid, error_msg = validate_character_yaml(char_yaml_content)
+        if not valid:
+            await interaction.channel.send(f"❌ キャラクターYAMLの生成に失敗しました: {error_msg}")
+            return
+
+        # 保存(元のcharacter.yamlは上書きしない)
+        char_file = config_dir / f"character_{safe_name}.yaml"
+        with open(char_file, "w", encoding="utf-8") as f:
+            f.write(char_yaml_content)
+
+        await interaction.channel.send(f"✅ キャラクター設定を `{char_file.name}` に保存しました")
+
+        # --- ステップ2: 挨拶テンプレート生成 ---
+        await interaction.channel.send("📝 **ステップ2/2**: 挨拶テンプレートを生成中...")
+
+        greet_prompt = build_greetings_generation_prompt(char_yaml_content)
+        greet_response = client.chat.completions.create(
+            model=MODEL_IDENTIFIER,
+            messages=[
+                {"role": "system", "content": "あなたはキャラクターの口調で挨拶文を作成する専門家です。YAML形式のみで出力してください。"},
+                {"role": "user", "content": greet_prompt}
+            ],
+            temperature=0.7,
+            max_tokens=2000,
+        )
+
+        greet_yaml_raw = greet_response.choices[0].message.content.strip()
+        greet_yaml_content = extract_yaml_from_response(greet_yaml_raw)
+
+        # 保存
+        greet_file = config_dir / f"greetings_{safe_name}.yaml"
+        with open(greet_file, "w", encoding="utf-8") as f:
+            f.write(greet_yaml_content)
+
+        await interaction.channel.send(f"✅ 挨拶テンプレートを `{greet_file.name}` に保存しました")
+
+        # --- 完了メッセージ ---
+        done_embed = discord.Embed(
+            title=f"🎉 {character_name} の生成が完了しました！",
+            description=(
+                f"以下のファイルが生成されました:\n"
+                f"• `config/{char_file.name}` — キャラクター設定\n"
+                f"• `config/{greet_file.name}` — 挨拶テンプレート\n\n"
+                f"**切り替え方法:**\n"
+                f"1. `config/{char_file.name}` → `config/character.yaml` にコピー\n"
+                f"2. `config/{greet_file.name}` → `config/greetings.yaml` にコピー\n"
+                f"3. BOTを再起動\n\n"
+                f"⚠️ 生成されたYAMLの内容を確認してから切り替えてください。"
+            ),
+            color=discord.Color.green()
+        )
+        await interaction.channel.send(embed=done_embed)
+
+    except Exception as e:
+        await interaction.channel.send(f"❌ エラーが発生しました: {str(e)}")
+
+
+@bot.tree.command(name="shutdown", description="BOTを停止する(管理者のみ)")
 async def shutdown_bot(interaction: discord.Interaction):
-    # 管理者チェック（サーバー管理者のみ実行可能）
+    # 管理者チェック(サーバー管理者のみ実行可能)
     if not interaction.user.guild_permissions.administrator:
         await interaction.response.send_message("❌ このコマンドは管理者のみ使用できます", ephemeral=True)
         return
@@ -301,7 +467,7 @@ async def send_shutdown_message():
 
 
 def run_bot():
-    """BOTを実行（graceful shutdown対応）"""
+    """BOTを実行(graceful shutdown対応)"""
     import signal
     import asyncio
     

@@ -45,13 +45,13 @@ class TestAffinityManager:
         assert result == 10
     
     def test_max_affinity_cap(self, affinity_manager):
-        """好感度の上限（100）"""
+        """好感度の上限(100)"""
         affinity_manager.get_affinity("user1")
         result = affinity_manager.add_affinity("user1", 1000)
         assert result == 100
     
     def test_min_affinity_cap(self, affinity_manager):
-        """好感度の下限（0）"""
+        """好感度の下限(0)"""
         affinity_manager.get_affinity("user1")
         result = affinity_manager.add_affinity("user1", -1000)
         assert result == 0
