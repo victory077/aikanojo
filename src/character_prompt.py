@@ -117,7 +117,7 @@ def build_greetings_generation_prompt(character_yaml_content: str) -> str:
 
 [ルール]
 - キャラの口調・性格に忠実に
-- 絵文字は使わない
+- 絵文字は禁止
 - YAMLのみ出力(説明文不要、コードフェンス不要)
 
 [フォーマット]

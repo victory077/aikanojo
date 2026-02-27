@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.6.0] - 2026-02-28
+
+### Added
+
+- **ChromaDBベクトル記憶** — 会話ログをセマンティック検索で取得可能に (`memory/chroma_store.py`)
+- **CRAG (Corrective RAG)** — 検索結果の妥当性をLLMで評価しフィルタリング (`memory/crag_evaluator.py`)
+- `LLMClient`クラス — LLM API呼び出しの一元管理 (`core/llm_client.py`)
+- `build_system_prompt()`をpure function化 (`core/prompt_builder.py`)
+- 断定形プロンプト — AIアシスタント的振る舞いの禁止、過剰謝罪防止
+- `<thought>`タグによる返答前の心理分析強制（出力からは自動除去）
+- voice_examples（口調の例）をシステムプロンプトに自動統合
+- `tests/conftest.py` — pytestのsys.path設定を一元化
+- `/affinity`コマンドにベクトル記憶数を表示
+
+### Changed
+
+- **ディレクトリ構成を大幅リファクタリング**: フラット`src/` → `src/bot/`, `src/core/`, `src/memory/` の3パッケージに分離
+- `MemoryManager`がYAML 3層記憶 + ChromaDBセマンティック検索を統合
+- 起動コマンドを `uv run src/main.py` → `uv run src/bot/main.py` に変更
+- `pyproject.toml`にchromadb依存を追加、バージョンを0.6.0に更新
+
+---
+
 ## [0.5.0] - 2026-02-25
 
 ### Added

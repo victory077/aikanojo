@@ -1,15 +1,22 @@
 [project]
 name = "aikanojo"
-version = "0.1.0"
-description = "Add your description here"
+version = "0.6.0"
+description = "AI彼女BOT - ローカルLLMを使ったDiscordキャラクターロールプレイBOT"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "chromadb>=1.0.0",
     "discord-py>=2.6.4",
     "openai>=2.16.0",
     "python-dotenv>=1.2.1",
     "pyyaml>=6.0.3",
 ]
+
+[tool.uv]
+package = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [dependency-groups]
 dev = [

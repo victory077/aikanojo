@@ -15,6 +15,7 @@ wheels/
 # User data (auto-generated)
 data/user_affinity.yaml
 data/user_memory.yaml
+data/chroma_db/
 
 # Diary data (auto-generated)
 diary/

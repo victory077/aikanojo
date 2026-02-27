@@ -7,11 +7,8 @@
 - validate_character_yaml: 必須フィールドの検証が正しく動作するか
 """
 import pytest
-import sys
 from pathlib import Path
 
-# srcをパスに追加
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from character_prompt import (
     build_character_generation_prompt,
